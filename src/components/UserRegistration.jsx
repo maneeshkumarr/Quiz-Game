@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import apiService from '../services/apiService';
+import socketService from '../services/socketService';
 import './UserRegistration.css';
 
 const UserRegistration = ({ onStart }) => {
@@ -7,6 +9,7 @@ const UserRegistration = ({ onStart }) => {
     usn: ''
   });
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -42,10 +45,45 @@ const UserRegistration = ({ onStart }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      onStart(formData);
+    if (!validateForm()) return;
+
+    setIsLoading(true);
+    try {
+      // Register user with the backend
+      const response = await apiService.registerUser({
+        name: formData.name.trim(),
+        usn: formData.usn.trim()
+      });
+
+      if (response.success) {
+        // Connect to WebSocket for real-time updates
+        socketService.connect();
+        socketService.joinQuiz({
+          name: response.user.name,
+          usn: response.user.usn
+        });
+
+        onStart({
+          ...response.user,
+          isNewUser: !response.message?.includes('Welcome back')
+        });
+      }
+    } catch (error) {
+      console.error('Registration failed:', error);
+      
+      if (error.message.includes('already completed')) {
+        setErrors({ 
+          general: 'You have already completed the quiz. Please contact your instructor if you need to retake it.' 
+        });
+      } else {
+        setErrors({ 
+          general: error.message || 'Registration failed. Please try again.' 
+        });
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -95,10 +133,20 @@ const UserRegistration = ({ onStart }) => {
             />
             {errors.usn && <span className="error-message">{errors.usn}</span>}
           </div>
+
+          {errors.general && (
+            <div className="error-message general-error">
+              {errors.general}
+            </div>
+          )}
           
-          <button type="submit" className="start-button">
-            <span className="button-text">Begin Journey</span>
-            <span className="button-icon">✨</span>
+          <button type="submit" className="start-button" disabled={isLoading}>
+            <span className="button-text">
+              {isLoading ? 'Connecting...' : 'Begin Journey'}
+            </span>
+            <span className="button-icon">
+              {isLoading ? '⏳' : '✨'}
+            </span>
           </button>
         </form>
         

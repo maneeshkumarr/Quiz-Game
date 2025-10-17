@@ -1,20 +1,81 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import apiService from '../services/apiService';
+import socketService from '../services/socketService';
 import './Leaderboard.css';
 
-const Leaderboard = ({ currentUser, onRestart }) => {
+const Leaderboard = ({ currentUser, onRestart, onAdminAccess }) => {
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentUserRank, setCurrentUserRank] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [liveStats, setLiveStats] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      
+      // Try to fetch from API first
+      const response = await apiService.getLiveLeaderboard();
+      if (response.success) {
+        setLeaderboard(response.liveData.slice(0, 20)); // Top 20
+        setLiveStats(response.summary);
+        
+        // Find current user's rank
+        const userRank = response.liveData.findIndex(score => 
+          score.name === currentUser.name && score.usn === currentUser.usn
+        ) + 1;
+        setCurrentUserRank(userRank || null);
+        setLastUpdate(new Date());
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to fetch leaderboard from API:', error);
+    }
+
+    // Fallback to localStorage
+    try {
+      const scores = JSON.parse(localStorage.getItem('quizLeaderboard') || '[]');
+      const formattedScores = scores.slice(0, 10).map((score, index) => ({
+        ...score,
+        rank: index + 1,
+        display_status: 'Completed'
+      }));
+      
+      setLeaderboard(formattedScores);
+      
+      const userRank = scores.findIndex(score => 
+        score.name === currentUser.name && score.usn === currentUser.usn
+      ) + 1;
+      setCurrentUserRank(userRank);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error('Failed to load leaderboard from localStorage:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser]);
+
+  // Real-time leaderboard updates
+  const handleLeaderboardUpdate = useCallback((data) => {
+    console.log('Received leaderboard update:', data);
+    // Refresh leaderboard when someone completes the quiz
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
   useEffect(() => {
-    const scores = JSON.parse(localStorage.getItem('quizLeaderboard') || '[]');
-    setLeaderboard(scores.slice(0, 10)); // Top 10 scores
+    fetchLeaderboard();
     
-    // Find current user's rank
-    const userRank = scores.findIndex(score => 
-      score.name === currentUser.name && score.usn === currentUser.usn
-    ) + 1;
-    setCurrentUserRank(userRank);
-  }, [currentUser]);
+    // Set up real-time updates
+    socketService.onLeaderboardUpdate(handleLeaderboardUpdate);
+    
+    // Set up periodic refresh for live stats
+    const refreshInterval = setInterval(fetchLeaderboard, 30000); // Refresh every 30 seconds
+
+    return () => {
+      socketService.offLeaderboardUpdate(handleLeaderboardUpdate);
+      clearInterval(refreshInterval);
+    };
+  }, [fetchLeaderboard, handleLeaderboardUpdate]);
 
   const getRankIcon = (rank) => {
     switch (rank) {
@@ -89,9 +150,42 @@ const Leaderboard = ({ currentUser, onRestart }) => {
 
         {/* Leaderboard List */}
         <div className="leaderboard-list">
-          <h2 className="list-title">🌟 Top Performers</h2>
+          <div className="leaderboard-header-section">
+            <h2 className="list-title">🌟 Top Performers</h2>
+            {liveStats && (
+              <div className="live-stats">
+                <div className="stat-item">
+                  <span className="stat-number">{liveStats.totalRegistered}</span>
+                  <span className="stat-label">Registered</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-number">{liveStats.completed}</span>
+                  <span className="stat-label">Completed</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-number">{liveStats.inProgress}</span>
+                  <span className="stat-label">In Progress</span>
+                </div>
+                <div className="stat-item">
+                  <span className="stat-number">{liveStats.averageScore}%</span>
+                  <span className="stat-label">Avg Score</span>
+                </div>
+              </div>
+            )}
+            {lastUpdate && (
+              <div className="last-update">
+                <span className="update-indicator">🔄</span>
+                Last updated: {lastUpdate.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
           
-          {leaderboard.length === 0 ? (
+          {isLoading ? (
+            <div className="loading-leaderboard">
+              <div className="loading-spinner"></div>
+              <p>Loading leaderboard...</p>
+            </div>
+          ) : leaderboard.length === 0 ? (
             <div className="empty-leaderboard">
               <p>🚀 Be the first to set a record!</p>
             </div>
@@ -114,7 +208,10 @@ const Leaderboard = ({ currentUser, onRestart }) => {
                   <div className="player-info">
                     <h4 className="player-name">{score.name}</h4>
                     <p className="player-usn">{score.usn}</p>
-                    <p className="play-date">{formatDate(score.timestamp)}</p>
+                    <p className="play-date">
+                      {score.completed_at ? formatDate(score.completed_at) : formatDate(score.timestamp)}
+                    </p>
+                    <p className="quiz-status">{score.display_status}</p>
                   </div>
                   
                   <div className="score-section">
@@ -163,6 +260,13 @@ const Leaderboard = ({ currentUser, onRestart }) => {
             <span className="button-text">Share Score</span>
             <span className="button-icon">📱</span>
           </button>
+
+          {onAdminAccess && (
+            <button onClick={onAdminAccess} className="admin-button">
+              <span className="button-text">Teacher Dashboard</span>
+              <span className="button-icon">👨‍🏫</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
