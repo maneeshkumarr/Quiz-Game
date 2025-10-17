@@ -2,10 +2,11 @@ import { useState } from 'react'
 import UserRegistration from './components/UserRegistration'
 import Quiz from './components/Quiz'
 import Leaderboard from './components/Leaderboard'
+import AdminDashboard from './components/AdminDashboard'
 import './App.css'
 
 function App() {
-  const [currentView, setCurrentView] = useState('registration') // 'registration', 'quiz', 'leaderboard'
+  const [currentView, setCurrentView] = useState('registration') // 'registration', 'quiz', 'leaderboard', 'admin'
   const [user, setUser] = useState(null)
   const [quizResult, setQuizResult] = useState(null)
 
@@ -25,6 +26,14 @@ function App() {
     setCurrentView('registration')
   }
 
+  const handleAdminAccess = () => {
+    setCurrentView('admin')
+  }
+
+  const handleBackFromAdmin = () => {
+    setCurrentView('leaderboard')
+  }
+
   return (
     <div className="app">
       {currentView === 'registration' && (
@@ -36,7 +45,15 @@ function App() {
       )}
       
       {currentView === 'leaderboard' && quizResult && (
-        <Leaderboard currentUser={quizResult} onRestart={handleRestart} />
+        <Leaderboard 
+          currentUser={quizResult} 
+          onRestart={handleRestart}
+          onAdminAccess={handleAdminAccess}
+        />
+      )}
+      
+      {currentView === 'admin' && (
+        <AdminDashboard onBack={handleBackFromAdmin} />
       )}
     </div>
   )

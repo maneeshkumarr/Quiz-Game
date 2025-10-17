@@ -376,6 +376,105 @@
   box-shadow: 0 15px 30px rgba(58, 134, 255, 0.4);
 }
 
+.admin-button {
+  background: linear-gradient(45deg, #ff006e, #8338ec);
+  border: none;
+  border-radius: 12px;
+  padding: 15px 30px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 15px 30px rgba(255, 0, 110, 0.4);
+}
+
+/* Live Stats Styles */
+.leaderboard-header-section {
+  margin-bottom: 30px;
+}
+
+.live-stats {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin: 20px 0;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.live-stats .stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-stats .stat-number {
+  color: white;
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+}
+
+.live-stats .stat-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.last-update {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.update-indicator {
+  animation: updatePulse 2s ease-in-out infinite;
+}
+
+@keyframes updatePulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.quiz-status {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.loading-leaderboard {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.loading-leaderboard .loading-spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 15px;
+}
+
 .button-icon {
   font-size: 1.1rem;
   animation: buttonIconSpin 2s ease-in-out infinite;

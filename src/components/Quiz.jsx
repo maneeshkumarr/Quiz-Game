@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { quizData, quizOrder } from '../data/quizData';
+import apiService from '../services/apiService';
+import socketService from '../services/socketService';
 import './Quiz.css';
 
 const Quiz = ({ user, onComplete }) => {
@@ -10,33 +12,85 @@ const Quiz = ({ user, onComplete }) => {
   const [showResult, setShowResult] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [isAnswered, setIsAnswered] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [quizStartTime, setQuizStartTime] = useState(null);
+  const [questionStartTime, setQuestionStartTime] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const currentQuiz = quizData[quizOrder[currentLevel]];
 
+  // Initialize quiz session
+  useEffect(() => {
+    const startQuizSession = async () => {
+      try {
+        const response = await apiService.startQuiz(user.id);
+        if (response.success) {
+          setSessionId(response.sessionId);
+          setQuizStartTime(Date.now());
+          setQuestionStartTime(Date.now());
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error('Failed to start quiz session:', error);
+        // Fallback to offline mode if API fails
+        setSessionId('offline-' + Date.now());
+        setQuizStartTime(Date.now());
+        setQuestionStartTime(Date.now());
+        setIsLoading(false);
+      }
+    };
+
+    if (user?.id && !sessionId) {
+      startQuizSession();
+    }
+  }, [user, sessionId]);
+
   // Timer effect
   useEffect(() => {
-    if (timeLeft > 0 && !isAnswered) {
+    if (timeLeft > 0 && !isAnswered && !isLoading) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !isAnswered) {
+    } else if (timeLeft === 0 && !isAnswered && !isLoading) {
       handleNextQuestion();
     }
-  }, [timeLeft, isAnswered]);
+  }, [timeLeft, isAnswered, isLoading]);
 
   // Reset timer when question changes
   useEffect(() => {
     setTimeLeft(30);
     setIsAnswered(false);
     setSelectedAnswer(null);
+    setQuestionStartTime(Date.now());
   }, [currentQuestion, currentLevel]);
 
-  const handleAnswerSelect = (answerIndex) => {
+  const handleAnswerSelect = async (answerIndex) => {
     if (!isAnswered) {
       setSelectedAnswer(answerIndex);
       setIsAnswered(true);
       
-      if (answerIndex === currentQuiz.questions[currentQuestion].correct) {
+      const isCorrect = answerIndex === currentQuiz.questions[currentQuestion].correct;
+      if (isCorrect) {
         setScore(score + 1);
+      }
+
+      // Calculate time taken for this question
+      const timeTaken = Math.round((Date.now() - questionStartTime) / 1000);
+
+      // Submit answer to backend
+      if (sessionId && !sessionId.startsWith('offline-')) {
+        try {
+          await apiService.submitAnswer({
+            sessionId,
+            questionId: currentQuiz.questions[currentQuestion].id,
+            level: quizOrder[currentLevel],
+            selectedAnswer: answerIndex,
+            correctAnswer: currentQuiz.questions[currentQuestion].correct,
+            timeTaken
+          });
+        } catch (error) {
+          console.error('Failed to submit answer:', error);
+          // Continue with quiz even if API fails
+        }
       }
       
       setTimeout(() => {
@@ -56,21 +110,50 @@ const Quiz = ({ user, onComplete }) => {
     }
   };
 
-  const handleFinishQuiz = () => {
+  const handleFinishQuiz = async () => {
+    const totalQuestions = quizOrder.reduce((acc, level) => acc + quizData[level].questions.length, 0);
+    const percentage = Math.round((score / totalQuestions) * 100);
+    const totalTimeTaken = Math.round((Date.now() - quizStartTime) / 1000);
+
     const finalScore = {
       name: user.name,
       usn: user.usn,
       score: score,
-      totalQuestions: quizOrder.reduce((acc, level) => acc + quizData[level].questions.length, 0),
-      percentage: Math.round((score / quizOrder.reduce((acc, level) => acc + quizData[level].questions.length, 0)) * 100),
+      totalQuestions,
+      percentage,
+      timeTaken: totalTimeTaken,
       timestamp: new Date().toISOString()
     };
-    
-    // Save to leaderboard
-    const existingScores = JSON.parse(localStorage.getItem('quizLeaderboard') || '[]');
-    existingScores.push(finalScore);
-    existingScores.sort((a, b) => b.percentage - a.percentage);
-    localStorage.setItem('quizLeaderboard', JSON.stringify(existingScores));
+
+    // Complete quiz session in backend
+    if (sessionId && !sessionId.startsWith('offline-')) {
+      try {
+        const response = await apiService.completeQuiz(sessionId, totalTimeTaken);
+        if (response.success) {
+          finalScore.session = response.session;
+          
+          // Emit real-time update
+          socketService.emitQuizCompleted({
+            name: user.name,
+            usn: user.usn,
+            percentage,
+            score,
+            totalQuestions
+          });
+        }
+      } catch (error) {
+        console.error('Failed to complete quiz session:', error);
+        // Continue with local storage fallback
+      }
+    }
+
+    // Fallback to localStorage if API fails or offline mode
+    if (sessionId?.startsWith('offline-') || !sessionId) {
+      const existingScores = JSON.parse(localStorage.getItem('quizLeaderboard') || '[]');
+      existingScores.push(finalScore);
+      existingScores.sort((a, b) => b.percentage - a.percentage);
+      localStorage.setItem('quizLeaderboard', JSON.stringify(existingScores));
+    }
     
     onComplete(finalScore);
   };
@@ -80,6 +163,19 @@ const Quiz = ({ user, onComplete }) => {
     const currentQuestionIndex = quizOrder.slice(0, currentLevel).reduce((acc, level) => acc + quizData[level].questions.length, 0) + currentQuestion;
     return Math.round((currentQuestionIndex / totalQuestions) * 100);
   };
+
+  if (isLoading) {
+    return (
+      <div className="quiz-container">
+        <div className="cosmic-bg"></div>
+        <div className="loading-card">
+          <div className="loading-spinner"></div>
+          <h2>Initializing Quiz Session...</h2>
+          <p>Connecting to quiz server and preparing your questions.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (showResult) {
     const totalQuestions = quizOrder.reduce((acc, level) => acc + quizData[level].questions.length, 0);
