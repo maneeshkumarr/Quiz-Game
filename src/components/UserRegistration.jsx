@@ -28,16 +28,25 @@ const UserRegistration = ({ onStart }) => {
   const validateForm = () => {
     const newErrors = {};
     
+    // Name validation
     if (!formData.name.trim()) {
       newErrors.name = 'Name is required';
     } else if (formData.name.trim().length < 2) {
       newErrors.name = 'Name must be at least 2 characters';
+    } else if (formData.name.trim().length > 50) {
+      newErrors.name = 'Name must be less than 50 characters';
     }
     
+    // USN validation with regex pattern (e.g., nnm24mc077)
     if (!formData.usn.trim()) {
       newErrors.usn = 'USN is required';
-    } else if (formData.usn.trim().length < 3) {
-      newErrors.usn = 'USN must be at least 3 characters';
+    } else {
+      const usnPattern = /^[a-zA-Z]{3}\d{2}[a-zA-Z]{2}\d{3}$/;
+      const cleanUSN = formData.usn.trim().toLowerCase();
+      
+      if (!usnPattern.test(cleanUSN)) {
+        newErrors.usn = 'USN format: 3 letters + 2 digits + 2 letters + 3 digits (e.g., nnm24mc077)';
+      }
     }
     
     setErrors(newErrors);
@@ -121,9 +130,15 @@ const UserRegistration = ({ onStart }) => {
               value={formData.usn}
               onChange={handleInputChange}
               className={`form-input ${errors.usn ? 'error' : ''}`}
-              placeholder="Enter your USN"
+              placeholder="e.g., nnm24mc077"
+              pattern="[a-zA-Z]{3}[0-9]{2}[a-zA-Z]{2}[0-9]{3}"
+              title="USN format: 3 letters + 2 digits + 2 letters + 3 digits (e.g., nnm24mc077)"
+              maxLength="10"
             />
             {errors.usn && <span className="error-message">{errors.usn}</span>}
+            {!errors.usn && (
+              <span className="help-text">Format: 3 letters + 2 digits + 2 letters + 3 digits</span>
+            )}
           </div>
 
           {errors.general && (
