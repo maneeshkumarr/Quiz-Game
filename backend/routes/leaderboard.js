@@ -1,5 +1,5 @@
 const express = require('express');
-const { dbHelpers } = require('../database/database');
+const { dbHelpers, database } = require('../database/database');
 
 const router = express.Router();
 
@@ -8,7 +8,7 @@ router.get('/', async (req, res) => {
   try {
     const { limit = 50, offset = 0 } = req.query;
     
-    const leaderboard = await dbHelpers.database.all(`
+    const leaderboard = await database.all(`
       SELECT 
         u.name, 
         u.usn, 
@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
     );
 
     // Get total count for pagination
-    const totalCount = await dbHelpers.database.get(`
+    const totalCount = await database.get(`
       SELECT COUNT(*) as count 
       FROM quiz_sessions qs 
       WHERE qs.status = 'completed'

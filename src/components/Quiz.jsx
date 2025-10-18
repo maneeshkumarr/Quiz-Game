@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { quizData, quizOrder } from '../data/quizData';
-import apiService from '../services/apiService';
-import socketService from '../services/socketService';
+import enhancedStorageService from '../services/enhancedStorageService';
 import './Quiz.css';
 
 const Quiz = ({ user, onComplete }) => {
@@ -23,7 +22,7 @@ const Quiz = ({ user, onComplete }) => {
   useEffect(() => {
     const startQuizSession = async () => {
       try {
-        const response = await apiService.startQuiz(user.id);
+        const response = await enhancedStorageService.startQuiz(user.id);
         if (response.success) {
           setSessionId(response.sessionId);
           setQuizStartTime(Date.now());
@@ -32,18 +31,17 @@ const Quiz = ({ user, onComplete }) => {
         }
       } catch (error) {
         console.error('Failed to start quiz session:', error);
-        // Fallback to offline mode if API fails
-        setSessionId('offline-' + Date.now());
-        setQuizStartTime(Date.now());
-        setQuestionStartTime(Date.now());
-        setIsLoading(false);
+        alert(error.message || 'Failed to start quiz. Please try again.');
+        if (onComplete) {
+          onComplete();
+        }
       }
     };
 
     if (user?.id && !sessionId) {
       startQuizSession();
     }
-  }, [user, sessionId]);
+  }, [user, sessionId, onComplete]);
 
   // Timer effect
   useEffect(() => {
@@ -76,21 +74,18 @@ const Quiz = ({ user, onComplete }) => {
       // Calculate time taken for this question
       const timeTaken = Math.round((Date.now() - questionStartTime) / 1000);
 
-      // Submit answer to backend
-      if (sessionId && !sessionId.startsWith('offline-')) {
-        try {
-          await apiService.submitAnswer({
-            sessionId,
-            questionId: currentQuiz.questions[currentQuestion].id,
-            level: quizOrder[currentLevel],
-            selectedAnswer: answerIndex,
-            correctAnswer: currentQuiz.questions[currentQuestion].correct,
-            timeTaken
-          });
-        } catch (error) {
-          console.error('Failed to submit answer:', error);
-          // Continue with quiz even if API fails
-        }
+      // Submit answer to enhanced storage
+      try {
+        await enhancedStorageService.submitAnswer({
+          sessionId,
+          questionId: currentQuiz.questions[currentQuestion].id,
+          level: quizOrder[currentLevel],
+          selectedAnswer: answerIndex,
+          correctAnswer: currentQuiz.questions[currentQuestion].correct,
+          timeTaken
+        });
+      } catch (error) {
+        console.error('Failed to submit answer:', error);
       }
       
       setTimeout(() => {
@@ -112,53 +107,25 @@ const Quiz = ({ user, onComplete }) => {
 
   const handleFinishQuiz = async () => {
     const totalQuestions = quizOrder.reduce((acc, level) => acc + quizData[level].questions.length, 0);
-    const percentage = Math.round((score / totalQuestions) * 100);
     const totalTimeTaken = Math.round((Date.now() - quizStartTime) / 1000);
 
-    const finalScore = {
-      name: user.name,
-      usn: user.usn,
-      score: score,
-      totalQuestions,
-      percentage,
-      timeTaken: totalTimeTaken,
-      timestamp: new Date().toISOString()
-    };
-
-    // Complete quiz session in backend
-    if (sessionId && !sessionId.startsWith('offline-')) {
-      try {
-        const response = await apiService.completeQuiz(sessionId, totalTimeTaken);
-        if (response.success) {
-          finalScore.session = response.session;
-          
-          // Emit real-time update
-          socketService.emitQuizCompleted({
-            name: user.name,
-            usn: user.usn,
-            percentage,
-            score,
-            totalQuestions
-          });
-        }
-      } catch (error) {
-        console.error('Failed to complete quiz session:', error);
-        // Continue with local storage fallback
+    try {
+      const response = await enhancedStorageService.completeQuiz(sessionId, totalTimeTaken);
+      if (response.success) {
+        onComplete(response.results);
       }
+    } catch (error) {
+      console.error('Failed to complete quiz:', error);
+      // Fallback completion
+      const results = {
+        score,
+        totalQuestions,
+        percentage: Math.round((score / totalQuestions) * 100),
+        timeTaken: totalTimeTaken
+      };
+      onComplete(results);
     }
-
-    // Fallback to localStorage if API fails or offline mode
-    if (sessionId?.startsWith('offline-') || !sessionId) {
-      const existingScores = JSON.parse(localStorage.getItem('quizLeaderboard') || '[]');
-      existingScores.push(finalScore);
-      existingScores.sort((a, b) => b.percentage - a.percentage);
-      localStorage.setItem('quizLeaderboard', JSON.stringify(existingScores));
-    }
-    
-    onComplete(finalScore);
-  };
-
-  const getProgressPercentage = () => {
+  };  const getProgressPercentage = () => {
     const totalQuestions = quizOrder.reduce((acc, level) => acc + quizData[level].questions.length, 0);
     const currentQuestionIndex = quizOrder.slice(0, currentLevel).reduce((acc, level) => acc + quizData[level].questions.length, 0) + currentQuestion;
     return Math.round((currentQuestionIndex / totalQuestions) * 100);

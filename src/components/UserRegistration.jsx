@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import apiService from '../services/apiService';
-import socketService from '../services/socketService';
+import enhancedStorageService from '../services/enhancedStorageService';
 import './UserRegistration.css';
 
 const UserRegistration = ({ onStart }) => {
@@ -51,20 +50,13 @@ const UserRegistration = ({ onStart }) => {
 
     setIsLoading(true);
     try {
-      // Register user with the backend
-      const response = await apiService.registerUser({
+      // Register user with enhanced storage service
+      const response = await enhancedStorageService.registerUser({
         name: formData.name.trim(),
         usn: formData.usn.trim()
       });
 
       if (response.success) {
-        // Connect to WebSocket for real-time updates
-        socketService.connect();
-        socketService.joinQuiz({
-          name: response.user.name,
-          usn: response.user.usn
-        });
-
         onStart({
           ...response.user,
           isNewUser: !response.message?.includes('Welcome back')

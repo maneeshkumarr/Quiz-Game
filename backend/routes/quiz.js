@@ -20,7 +20,8 @@ router.post('/start', async (req, res) => {
     }
 
     // Check if user already has a completed session
-    const existingSession = await dbHelpers.database.get(
+    const { database } = require('../database/database');
+    const existingSession = await database.get(
       'SELECT * FROM quiz_sessions WHERE user_id = ? AND status = "completed"',
       [userId]
     );
@@ -33,7 +34,7 @@ router.post('/start', async (req, res) => {
     }
 
     // Check for incomplete session
-    const incompleteSession = await dbHelpers.database.get(
+    const incompleteSession = await database.get(
       'SELECT * FROM quiz_sessions WHERE user_id = ? AND status = "in_progress"',
       [userId]
     );
@@ -141,7 +142,7 @@ router.post('/complete', async (req, res) => {
     }
 
     // Calculate results
-    const correctAnswers = await dbHelpers.database.get(
+    const correctAnswers = await database.get(
       'SELECT COUNT(*) as count FROM quiz_answers WHERE session_id = ? AND is_correct = 1',
       [sessionId]
     );
@@ -204,8 +205,8 @@ router.get('/session/:sessionId', async (req, res) => {
       return res.status(404).json({ error: 'Quiz session not found' });
     }
 
-    // Get answers for this session
-    const answers = await dbHelpers.database.all(
+    // Get answers for this session  
+    const answers = await database.all(
       'SELECT * FROM quiz_answers WHERE session_id = ? ORDER BY answered_at ASC',
       [sessionId]
     );
@@ -233,7 +234,7 @@ router.get('/stats', async (req, res) => {
     const stats = await dbHelpers.getClassroomStats();
     
     // Get level-wise statistics
-    const levelStats = await dbHelpers.database.all(`
+    const levelStats = await database.all(`
       SELECT 
         level,
         COUNT(*) as total_answers,

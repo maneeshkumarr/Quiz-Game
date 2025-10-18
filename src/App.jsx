@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import UserRegistration from './components/UserRegistration'
 import Quiz from './components/Quiz'
-import Leaderboard from './components/Leaderboard'
-import AdminDashboard from './components/AdminDashboard'
+import LeaderboardNew from './components/LeaderboardNew'
+import AdminDashboardNew from './components/AdminDashboardNew'
+import enhancedStorageService from './services/enhancedStorageService'
 import './App.css'
 
 function App() {
@@ -16,7 +17,7 @@ function App() {
   }
 
   const handleQuizComplete = (result) => {
-    setQuizResult(result)
+    setQuizResult({ ...result, ...user })
     setCurrentView('leaderboard')
   }
 
@@ -44,16 +45,19 @@ function App() {
         <Quiz user={user} onComplete={handleQuizComplete} />
       )}
       
-      {currentView === 'leaderboard' && quizResult && (
-        <Leaderboard 
-          currentUser={quizResult} 
+      {currentView === 'leaderboard' && (
+        <LeaderboardNew 
+          currentUser={user || quizResult} 
           onRestart={handleRestart}
           onAdminAccess={handleAdminAccess}
         />
       )}
       
       {currentView === 'admin' && (
-        <AdminDashboard onBack={handleBackFromAdmin} />
+        <AdminDashboardNew 
+          onBack={handleBackFromAdmin}
+          storageService={enhancedStorageService}
+        />
       )}
     </div>
   )
