@@ -86,7 +86,7 @@ const UserRegistration = ({ onStart }) => {
         <div className="card-header">
           <h1 className="title">
             <span className="title-icon">🚀</span>
-            Quiz Galaxy 2050
+            Web-Quiz
           </h1>
           <p className="subtitle">
             Enter the future of knowledge testing
